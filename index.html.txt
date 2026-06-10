@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Rocket League 2D - Multi-Contrôles</title>
+    <!-- Chargement de PeerJS pour le multijoueur sans serveur privé -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', sans-serif; background-color: #0c1020; color: white; user-select: none; touch-action: none; }
+        
+        /* --- ÉCRANS DE MENU --- */
+        #auth-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #0f172a; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 30; }
+        .auth-box { background: #1e293b; padding: 30px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; width: 300px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        .auth-title { font-size: 24px; font-weight: bold; margin-bottom: 20px; color: #38bdf8; text-transform: uppercase; }
+        .auth-input { background: #0f172a; border: 2px solid #475569; padding: 10px; border-radius: 6px; color: white; font-size: 16px; width: 100%; margin-bottom: 15px; box-sizing: border-box; outline: none; }
+        .auth-input:focus { border-color: #38bdf8; }
+        .auth-btn { background: #38bdf8; border: none; padding: 12px; font-size: 16px; font-weight: bold; color: #0f172a; border-radius: 6px; cursor: pointer; width: 100%; margin-bottom: 10px; text-transform: uppercase; }
+        .auth-toggle { font-size: 14px; color: #94a3b8; cursor: pointer; text-decoration: underline; margin-top: 10px; }
+        #auth-error { color: #f43f5e; font-size: 14px; margin-bottom: 15px; font-weight: bold; text-align: center; display: none; }
+
+        /* ÉCRAN DE SÉLECTION DU PÉRIPHÉRIQUE */
+        #device-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #0b0f19; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 25; }
+        .device-grid { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; max-width: 600px; margin-top: 20px; }
+        .device-card { background: #1e293b; border: 2px solid #475569; border-radius: 12px; padding: 20px; width: 180px; text-align: center; cursor: pointer; transition: 0.2s; }
+        .device-card:hover { border-color: #38bdf8; transform: translateY(-5px); }
+        .device-icon { font-size: 40px; margin-bottom: 10px; }
+
+        #menu-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #1e1b4b; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
+        .menu-btn { background: #00aaff; border: none; padding: 15px 40px; font-size: 20px; font-weight: bold; color: white; border-radius: 8px; cursor: pointer; margin: 10px; width: 280px; text-transform: uppercase; transition: 0.2s; }
+        .menu-btn:hover { transform: scale(1.03); }
+        .shop-btn { background: #e11d48; }
+
+        /* --- BOUTIQUE --- */
+        #shop-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #0f172a; display: none; flex-direction: column; align-items: center; justify-content: flex-start; z-index: 20; overflow-y: auto; padding: 40px 20px; box-sizing: border-box; }
+        .shop-section-title { font-size: 18px; color: #38bdf8; font-weight: bold; margin: 20px 0 10px 0; text-transform: uppercase; align-self: center; border-bottom: 2px solid #38bdf8; padding-bottom: 4px; width: 60%; text-align: center; }
+        .shop-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; max-width: 800px; margin-bottom: 10px; }
+        .shop-item { background: #1e293b; border: 2px solid #475569; border-radius: 8px; padding: 12px; width: 160px; text-align: center; cursor: pointer; transition: 0.2s; position: relative; }
+        .shop-item:hover { border-color: #38bdf8; background: #24334d; }
+        .shop-item.selected { border-color: #22c55e; background: rgba(34, 197, 94, 0.1); }
+        .shop-item.selected::after { content: "ÉQUIPÉ"; position: absolute; top: 5px; right: 5px; background: #22c55e; color: white; font-size: 9px; font-weight: bold; padding: 2px 5px; border-radius: 3px; }
+        .item-preview { width: 70px; height: 40px; margin: 10px auto; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 11px; }
+
+        /* --- ZONE MULTIJOUEUR / INVITATION --- */
+        .online-panel { background: rgba(15, 23, 42, 0.6); border: 1px solid #475569; padding: 15px; border-radius: 10px; margin-top: 15px; text-align: center; width: 280px; }
+        #invite-box { display: flex; gap: 5px; margin-top: 8px; }
+        #invite-input { background: #0f172a; border: 1px solid #475569; border-radius: 4px; color: white; padding: 8px; flex: 1; outline: none; }
+        .invite-btn { background: #22c55e; border: none; color: white; padding: 8px 12px; font-weight: bold; border-radius: 4px; cursor: pointer; }
+        
+        #invite-pop-up { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: #1e293b; border: 2px solid #38bdf8; padding: 20px; border-radius: 10px; display: none; z-index: 40; box-shadow: 0 4px 25px rgba(0,0,0,0.7); text-align: center; width: 300px; }
+        .pop-btn-container { display: flex; gap: 10px; justify-content: center; margin-top: 15px; }
+        .pop-btn { border: none; padding: 8px 20px; font-weight: bold; border-radius: 5px; cursor: pointer; }
+
+        /* --- INTERFACE EN MATCH --- */
+        #ui { position: absolute; top: 15px; width: 100%; display: none; flex-direction: column; align-items: center; z-index: 5; pointer-events: none; }
+        #score-container { display: flex; align-items: center; gap: 15px; background: rgba(15, 23, 42, 0.85); padding: 8px 30px; border-radius: 30px; pointer-events: auto; border: 2px solid rgba(255,255,255,0.1); box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
+        #timer { font-size: 24px; font-weight: bold; color: #ffeb3b; background: rgba(0,0,0,0.5); padding: 2px 12px; border-radius: 8px; min-width: 65px; text-align: center; }
+        
+        #money-counter { position: absolute; top: 20px; left: 20px; font-size: 20px; color: #eab308; font-weight: bold; display: none; z-index: 5; background: rgba(0,0,0,0.6); padding: 5px 15px; border-radius: 20px; }
+        
+        /* Boutons d'Action Match */
+        .top-match-btn { position: absolute; top: 20px; padding: 10px 15px; font-size: 14px; font-weight: bold; border-radius: 8px; border: none; cursor: pointer; z-index: 5; display: none; }
+        #leave-btn { right: 20px; background: #475569; color: white; }
+        #leave-btn:hover { background: #ef4444; }
+        #help-btn { right: 170px; background: #0284c7; color: white; }
+
+        #turbo-container { position: absolute; bottom: 30px; right: 30px; width: 180px; height: 20px; background: rgba(0,0,0,0.6); border: 2px solid white; border-radius: 10px; display: none; z-index: 5; overflow: hidden; }
+        #turbo-bar { width: 100%; height: 100%; background: linear-gradient(90deg, #f97316, #facc15); transition: width 0.05s ease-out; }
+        #goal-alert { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); font-size: 55px; font-weight: bold; color: #ffaa00; display: none; z-index: 6; text-shadow: 3px 3px 8px black; text-align: center; font-style: italic; }
+
+        .rank-badge { background: rgba(255,255,255,0.05); padding: 8px 15px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); margin-top: 5px; font-weight: bold; font-size: 18px; }
+
+        /* TUTO MODAL */
+        #tuto-modal { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.95); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; padding: 20px; box-sizing: border-box; }
+        .tuto-box { background: #1e293b; border: 2px solid #38bdf8; border-radius: 12px; padding: 30px; max-width: 450px; box-shadow: 0 4px 20px rgba(0,0,0,0.6); }
+
+        /* INTERFACE TACTILE MOBILE */
+        #mobile-controls { position: absolute; bottom: 30px; left: 30px; right: 30px; height: 150px; display: none; justify-content: space-between; align-items: center; z-index: 15; pointer-events: none; }
+        .touch-btn { width: 80px; height: 80px; background: rgba(255,255,255,0.15); border: 3px solid rgba(255,255,255,0.5); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; color: white; pointer-events: auto; user-select: none; -webkit-user-select: none; }
+        .touch-btn:active { background: rgba(255,255,255,0.4); }
+        #mobile-joystick-container { width: 120px; height: 120px; background: rgba(255,255,255,0.05); border: 2px dashed rgba(255,255,255,0.3); border-radius: 50%; display: flex; align-items: center; justify-content: center; pointer-events: auto; }
+        #mobile-joystick-knob { width: 50px; height: 50px; background: #38bdf8; border-radius: 50%; box-shadow: 0 0 10px #38bdf8; }
+    </style>
+</head>
+<body>
+
+    <!-- POP-UP INVITATION -->
+    <div id="invite-pop-up">
+        <div style="font-size: 18px; font-weight: bold; margin-bottom: 10px; color: #38bdf8;">🎮 INVITATION REÇUE</div>
+        <div id="invite-msg">Quelqu'un vous invite à lancer un match !</div>
+        <div class="pop-btn-container">
+            <button class="pop-btn" style="background: #22c55e; color: white;" onclick="accepterInvitation()">Accepter</button>
+            <button class="pop-btn" style="background: #ef4444; color: white;" onclick="refuserInvitation()">Refuser</button>
+        </div>
+    </div>
+
+    <!-- CONNEXION -->
+    <div id="auth-screen">
+        <h1 style="color:#00aaff; margin-bottom:20px; font-style: italic; text-shadow: 0 0 10px #00aaff;">ROCKET LEAGUE 2D</h1>
+        <div class="auth-box">
+            <div id="auth-box-title" class="auth-title">Connexion</div>
+            <div id="auth-error"></div>
+            <input type="text" id="auth-username" class="auth-input" placeholder="Identifiant / Pseudo" maxlength="12">
+            <input type="password" id="auth-password" class="auth-input" placeholder="Mot de passe">
+            <button id="auth-main-btn" class="auth-btn" onclick="gererAuthentification()">Se Connecter</button>
+            <div id="auth-toggle-mode" class="auth-toggle" onclick="basculerModeAuth()">Pas de compte ? S'inscrire</div>
+        </div>
+    </div>
+
+    <!-- ÉCRAN SÉLECTION PÉRIPHÉRIQUE -->
+    <div id="device-screen">
+        <h2 style="font-style: italic; text-transform: uppercase; color: #38bdf8;">Choisis ta méthode de jeu :</h2>
+        <div class="device-grid">
+            <div class="device-card" onclick="choisirPeripherique('clavier')">
+                <div class="device-icon">⌨️</div>
+                <div style="font-weight: bold;">Clavier & Souris</div>
+                <div style="font-size:12px; color:#94a3b8; margin-top:5px;">ZQSD / Flèches + Visée</div>
+            </div>
+            <div class="device-card" onclick="choisirPeripherique('souris')">
+                <div class="device-icon">🖱️</div>
+                <div style="font-weight: bold;">Souris Seule</div>
+                <div style="font-size:12px; color:#94a3b8; margin-top:5px;">Clic Gauche / Clic Droit</div>
+            </div>
+            <div class="device-card" onclick="choisirPeripherique('manette')">
+                <div class="device-icon">🎮</div>
+                <div style="font-weight: bold;">Manette</div>
+                <div style="font-size:12px; color:#94a3b8; margin-top:5px;">Joystick + Boutons A/B</div>
+            </div>
+            <div class="device-card" onclick="choisirPeripherique('mobile')">
+                <div class="device-icon">📱</div>
+                <div style="font-weight: bold;">Mobile / Tactile</div>
+                <div style="font-size:12px; color:#94a3b8; margin-top:5px;">Boutons Virtuels à l'écran</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TUTO / AIDE MODAL -->
+    <div id="tuto-modal">
+        <div class="tuto-box">
+            <h3 id="tuto-title" style="color: #38bdf8; margin-top: 0; font-size: 22px;">💡 GUIDE DES TOUCHES</h3>
+            <div id="tuto-content" style="text-align: left; line-height: 1.6; margin-bottom: 20px; font-size: 15px;"></div>
+            <button class="auth-btn" style="margin-bottom: 0;" onclick="fermerTuto()">J'ai compris !</button>
+        </div>
+    </div>
+
+    <!-- MENU PRINCIPAL -->
+    <div id="menu-screen">
+        <h1 style="font-style: italic; text-shadow: 0 0 15px #00aaff;">ROCKET LEAGUE 2D</h1>
+        <div style="font-size:20px; margin-bottom:5px;">Bienvenue, <span id="user-display-name" style="color:#38bdf8;"></span> !</div>
+        <div id="menu-rank-display" class="rank-badge">Rang : Bronze 1</div>
+        
+        <div class="online-panel">
+            <div style="font-size: 13px; color: #94a3b8;">Ton ID en ligne :</div>
+            <div id="my-online-id" style="font-weight: bold; color: #facc15; margin-bottom: 10px;">Connexion au serveur...</div>
+            <div style="font-size: 14px; font-weight: bold;">Défier un ami :</div>
+            <div id="invite-box">
+                <input type="text" id="invite-input" placeholder="Pseudo de ton ami">
+                <button class="invite-btn" onclick="envoyerInvitation()">Inviter</button>
+            </div>
+        </div>
+
+        <br>
+        <button class="menu-btn" onclick="lancerJeu(false)">Match Solo (vs Bot)</button>
+        <button class="menu-btn shop-btn" onclick="ouvrirBoutique()">Boutique</button>
+        <button class="menu-btn" style="background:#475569;" onclick="ouvrirSelectionPeripherique()">Changer Commandes</button>
+        <button class="menu-btn" style="background:#1e293b;" onclick="deconnexion()">Déconnexion</button>
+    </div>
+
+    <!-- BOUTIQUE -->
+    <div id="shop-screen">
+        <h2 style="margin-bottom: 5px; letter-spacing: 1px;">🚀 GARAGE & BOUTIQUE 🚀</h2>
+        <div style="font-size:22px; color:#eab308; font-weight: bold; margin-bottom: 10px;">💰 Mes Pièces : <span id="shop-coins">0</span></div>
+        
+        <div class="shop-section-title">🏎️ Modèles de Véhicules</div>
+        <div class="shop-container" id="shop-cars"></div>
+        <div class="shop-section-title">🔥 Effets de Boost</div>
+        <div class="shop-container" id="shop-boosts"></div>
+        <div class="shop-section-title">💥 Explosions de But</div>
+        <div class="shop-container" id="shop-goals"></div>
+        <br>
+        <button class="menu-btn" style="background:#22c55e;" onclick="fermerBoutique()">Sauvegarder & Retour</button>
+    </div>
+
+    <!-- INTERFACE EN MATCH -->
+    <div id="ui">
+        <div id="score-container">
+            <span id="sb" style="color:#38bdf8;">Joueur : 0</span>
+            <div id="timer">02:30</div>
+            <span id="sr" style="color:#f43f5e;">ADVERSE : 0</span>
+        </div>
+    </div>
+    
+    <div id="money-counter">💰 <span id="game-coins">0</span></div>
+    <button id="help-btn" class="top-match-btn" onclick="ouvrirTuto(true)">❓ Aide Touches</button>
+    <button id="leave-btn" class="top-match-btn" onclick="quitterMatch()">Quitter ↩</button>
+    <div id="turbo-container"><div id="turbo-bar"></div></div>
+    <div id="goal-alert">BUT !!!</div>
+
+    <!-- DISPOSITIF TACTILE MOBILE VIRTUEL -->
+    <div id="mobile-controls">
+        <div id="mobile-joystick-container">
+            <div id="mobile-joystick-knob"></div>
+        </div>
+        <div style="display:flex; gap:15px; pointer-events:auto;">
+            <div class="touch-btn" style="background:rgba(239, 68, 68, 0.4);" id="btn-touch-brake">RECUL</div>
+            <div class="touch-btn" style="background:rgba(249, 115, 22, 0.5);" id="btn-touch-boost">BOOST</div>
+            <div class="touch-btn" style="background:rgba(34, 197, 94, 0.4);" id="btn-touch-drive">AVANT</div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.createElement('canvas');
+        document.body.appendChild(canvas);
+        const ctx = canvas.getContext('2d');
+
+        function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        window.addEventListener('resize', resize);
+        resize();
+
+        let compteActif = null, modeInscription = false, pieces = 0, pseudo = "Joueur";
+        let skinEquipe = 0, boostEquipe = 0, goalEquipe = 0;
+        let listeVoituresPossedees = [0], listeBoostsPossedes = [0], listeGoalsPossedes = [0];
+        let rangIndex = 0, etoiles = 0;
+        
+        // Système de périphérique actif
+        let peripheriqueChoisi = 'clavier'; 
+
+        const listeRangs = [
+            { nom: "Bronze 1", couleur: "#cd7f32" }, { nom: "Bronze 2", couleur: "#cd7f32" }, { nom: "Bronze 3", couleur: "#cd7f32" },
+            { nom: "Argent 1", couleur: "#c0c0c0" }, { nom: "Argent 2", couleur: "#c0c0c0" }, { nom: "Argent 3", couleur: "#c0c0c0" },
+            { nom: "Gold 1", couleur: "#ffd700" },   { nom: "Gold 2", couleur: "#ffd700" },   { nom: "Gold 3", couleur: "#ffd700" },
+            { nom: "Diamant 1", couleur: "#9ac5db" },{ nom: "Diamant 2", couleur: "#9ac5db" },{ nom: "Diamant 3", couleur: "#9ac5db" },
+            { nom: "Élite 1", couleur: "#a855f7" },  { nom: "Élite 2", couleur: "#a855f7" },  { nom: "Élite 3", couleur: "#a855f7" },
+            { nom: "Champion", couleur: "#f43f5e" }, { nom: "Rocket Champion", couleur: "#38bdf8" }
+        ];
+
+        const catalogueVoitures = [
+            { id: 0, nom: "Classique", prix: 0, couleur: "#00aaff", type: "arrondi" },
+            { id: 1, nom: "Émeraude", prix: 100, couleur: "#10b981", type: "arrondi" },
+            { id: 2, nom: "Or du Roi", prix: 250, couleur: "#eab308", type: "arrondi" },
+            { id: 3, nom: "Cyber Truck", prix: 500, couleur: "#94a3b8", type: "futuriste" }
+        ];
+        const catalogueBoosts = [
+            { id: 0, nom: "Feu Standard", prix: 0, couleur: "#f97316" },
+            { id: 1, nom: "Plasma Violet", prix: 150, couleur: "#a855f7" },
+            { id: 2, nom: "Éclair Électrique", prix: 300, couleur: "#38bdf8" }
+        ];
+        const catalogueGoals = [
+            { id: 0, nom: "Standard", prix: 0, couleur: "#ffaa00" },
+            { id: 1, nom: "Onde Bleue", prix: 200, couleur: "#06b6d4" },
+            { id: 2, nom: "Supernova", prix: 450, couleur: "#ef4444" }
+        ];
+
+        const boostPads = [
+            { x: 0, y: 0, active: true, cooldown: 0 },
+            { x: -500, y: -400, active: true, cooldown: 0 },
+            { x: 500, y: -400, active: true, cooldown: 0 },
+            { x: -500, y: 400, active: true, cooldown: 0 },
+            { x: 500, y: 400, active: true, cooldown: 0 },
+            { x: 0, y: -500, active: true, cooldown: 0 },
+            { x: 0, y: 500, active: true, cooldown: 0 }
+        ];
+
+        // --- GESTION DU RÉSEAU (PEERJS) ---
+        let peer = null, conn = null, estEnLigne = false, jeSuisHote = false; 
+
+        function initialiserReseau(idJoueur) {
+            const reseauId = "rl2d-" + idJoueur.toLowerCase().replace(/[^a-z0-9]/g, "");
+            try {
+                peer = new Peer(reseauId);
+                peer.on('open', () => { document.getElementById('my-online-id').innerText = idJoueur; });
+                peer.on('connection', (nouvelleConn) => { conn = nouvelleConn; configurerEvenementsConnexion(); });
+            } catch(e) { console.error(e); }
+        }
+
+        function envoyerInvitation() {
+            let amiId = document.getElementById('invite-input').value.trim();
+            if(!amiId) return alert("Tape le pseudo de ton ami !");
+            const cibleId = "rl2d-" + amiId.toLowerCase().replace(/[^a-z0-9]/g, "");
+            document.getElementById('my-online-id').innerText = "Invitation envoyée...";
+            conn = peer.connect(cibleId); jeSuisHote = true; configurerEvenementsConnexion();
+        }
+
+        function configurerEvenementsConnexion() {
+            if (!conn) return;
+            conn.on('open', () => { if(jeSuisHote) conn.send({ type: 'INVITATION', de: pseudo }); });
+            conn.on('data', (data) => {
+                if (data.type === 'INVITATION') {
+                    document.getElementById('invite-msg').innerText = `${data.de} vous invite à disputer un match en ligne !`;
+                    document.getElementById('invite-pop-up').style.display = "block";
+                }
+                else if (data.type === 'REPONSE_INVIT') {
+                    if (data.accepte) lancerJeu(true);
+                    else { alert("L'invitation a été refusée."); document.getElementById('my-online-id').innerText = pseudo; }
+                }
+                else if (data.type === 'SYNC_INPUTS') {
+                    let cible = jeSuisHote ? bot : joueur;
+                    cible.x = data.x; cible.y = data.y; cible.angle = data.angle; cible.turbo = data.turbo;
+                    cible.skin = data.skin; cible.boostColor = data.boostColor;
+                }
+                else if (data.type === 'SYNC_BALL') {
+                    if (!jeSuisHote) {
+                        ball.x = data.x; ball.y = data.y; scoreBleu = data.sb; scoreRouge = data.sr; tempsRestant = data.temps;
+                        document.getElementById('sb').innerText = pseudo + " : " + scoreBleu;
+                        document.getElementById('sr').innerText = "ADVERSE : " + scoreRouge;
+                    }
+                }
+                else if (data.type === 'BUT') { declencherButLocal(data.texte, data.color); }
+            });
+            conn.on('close', () => { alert("Déconnecté."); quitterMatch(); });
+        }
+
+        function accepterInvitation() { document.getElementById('invite-pop-up').style.display = "none"; jeSuisHote = false; if(conn) { conn.send({ type: 'REPONSE_INVIT', accepte: true }); lancerJeu(true); } }
+        function refuserInvitation() { document.getElementById('invite-pop-up').style.display = "none"; if(conn) conn.send({ type: 'REPONSE_INVIT', accepte: false }); }
+
+        // --- AUTHENTIFICATION & COMPTE ---
+        function basculerModeAuth() {
+            modeInscription = !modeInscription;
+            document.getElementById('auth-box-title').innerText = modeInscription ? "Inscription" : "Connexion";
+            document.getElementById('auth-main-btn').innerText = modeInscription ? "Créer le compte" : "Se Connecter";
+            document.getElementById('auth-toggle-mode').innerText = modeInscription ? "Déjà un compte ? Se connecter" : "Pas de compte ? S'inscrire";
+        }
+
+        function gererAuthentification() {
+            const user = document.getElementById('auth-username').value.trim();
+            const pass = document.getElementById('auth-password').value;
+            const errorBox = document.getElementById('auth-error');
+            if (!user || !pass) { errorBox.innerText = "Remplis tous les champs !"; errorBox.style.display = "block"; return; }
+
+            let tousLesComptes = JSON.parse(localStorage.getItem('rl2d_comptes')) || {};
+            let compteKey = user.toLowerCase();
+
+            if (modeInscription) {
+                if (tousLesComptes[compteKey]) { errorBox.innerText = "Cet identifiant existe déjà !"; errorBox.style.display = "block"; } 
+                else {
+                    tousLesComptes[compteKey] = { username: user, password: pass, pieces: 150, skinEquipe: 0, boostEquipe: 0, goalEquipe: 0, voitures: [0], boosts: [0], goals: [0], rangIndex: 0, etoiles: 0 };
+                    localStorage.setItem('rl2d_comptes', JSON.stringify(tousLesComptes));
+                    connecter(compteKey, tousLesComptes[compteKey]);
+                }
+            } else {
+                if (tousLesComptes[compteKey] && tousLesComptes[compteKey].password === pass) { connecter(compteKey, tousLesComptes[compteKey]); } 
+                else { errorBox.innerText = "Identifiant ou mot de passe incorrect."; errorBox.style.display = "block"; }
+            }
+        }
+
+        function connecter(key, data) {
+            compteActif = key; pseudo = data.username; pieces = data.pieces;
+            skinEquipe = data.skinEquipe || 0; boostEquipe = data.boostEquipe || 0; goalEquipe = data.goalEquipe || 0;
+            listeVoituresPossedees = data.voitures || [0]; listeBoostsPossedes = data.boosts || [0]; listeGoalsPossedes = data.goals || [0];
+            rangIndex = data.rangIndex || 0; etoiles = data.etoiles || 0;
+            
+            document.getElementById('auth-screen').style.display = "none";
+            ouvrirSelectionPeripherique();
+            initialiserReseau(pseudo);
+        }
+
+        function ouvrirSelectionPeripherique() {
+            document.getElementById('menu-screen').style.display = "none";
+            document.getElementById('device-screen').style.display = "flex";
+        }
+
+        function choisirPeripherique(type) {
+            peripheriqueChoisi = type;
+            document.getElementById('device-screen').style.display = "none";
+            document.getElementById('menu-screen').style.display = "flex";
+            document.getElementById('user-display-name').innerText = pseudo;
+            actualiserAffichageRang();
+            ouvrirTuto(false); // Propose le tuto directement après le choix
+        }
+
+        // --- SYSTEME DE TUTORIEL ADAPTATIF ---
+        function ouvrirTuto(depuisMatch) {
+            const content = document.getElementById('tuto-content');
+            let texte = "";
+            
+            if (peripheriqueChoisi === 'clavier') {
+                texte = `<strong>⌨️ Contrôles Clavier :</strong><br><br>
+                • <strong>Z / Flèche Haut :</strong> Avancer<br>
+                • <strong>S / Flèche Bas :</strong> Reculer<br>
+                • <strong>Espace :</strong> Activer le Turbo / Boost<br>
+                • <strong>Souris :</strong> Bouge la souris pour orienter ta voiture.`;
+            } else if (peripheriqueChoisi === 'souris') {
+                texte = `<strong>静态 🖱️ Contrôles Souris Seule :</strong><br><br>
+                • <strong>Clic Gauche :</strong> Avancer<br>
+                • <strong>Clic Droit :</strong> Activer le Turbo / Boost<br>
+                • <strong>Mouvement :</strong> La voiture s'oriente automatiquement vers ton curseur.`;
+            } else if (peripheriqueChoisi === 'manette') {
+                texte = `<strong>🎮 Contrôles Manette Gamepad :</strong><br><br>
+                • <strong>Stick Gauche :</strong> Diriger et orienter le véhicule<br>
+                • <strong>Bouton A (Xbox) / ╳ (PS) :</strong> Avancer<br>
+                • <strong>Bouton B (Xbox) / ◯ (PS) :</strong> Activer le Turbo / Boost`;
+            } else if (peripheriqueChoisi === 'mobile') {
+                texte = `<strong>📱 Contrôles Mobiles / Tactiles :</strong><br><br>
+                • <strong>Joystick gauche :</strong> Glisse ton doigt pour orienter la voiture.<br>
+                • <strong>Boutons à droite :</strong> Appuie sur AVANT pour accélérer, RECUL pour freiner, et BOOST pour fuser !`;
+            }
+
+            content.innerHTML = texte;
+            document.getElementById('tuto-modal').style.display = "flex";
+        }
+        function fermerTuto() { document.getElementById('tuto-modal').style.display = "none"; }
+
+        function sauvegarder() {
+            if (!compteActif) return;
+            let tousLesComptes = JSON.parse(localStorage.getItem('rl2d_comptes')) || {};
+            if (tousLesComptes[compteActif]) {
+                tousLesComptes[compteActif].pieces = pieces;
+                tousLesComptes[compteActif].skinEquipe = skinEquipe; tousLesComptes[compteActif].boostEquipe = boostEquipe; tousLesComptes[compteActif].goalEquipe = goalEquipe;
+                tousLesComptes[compteActif].voitures = listeVoituresPossedees; tousLesComptes[compteActif].boosts = listeBoostsPossedes; tousLesComptes[compteActif].goals = listeGoalsPossedes;
+                tousLesComptes[compteActif].rangIndex = rangIndex; tousLesComptes[compteActif].etoiles = etoiles;
+                localStorage.setItem('rl2d_comptes', JSON.stringify(tousLesComptes));
+            }
+        }
+
+        function actualiserAffichageRang() {
+            let r = listeRangs[rangIndex]; let etoilesStr = rangIndex < listeRangs.length - 1 ? " " + "⭐".repeat(etoiles) + "☆".repeat(3 - etoiles) : " 🏆 (MAX)";
+            document.getElementById('menu-rank-display').innerHTML = `Rang : <span style="color:${r.couleur};">${r.nom}</span>${etoilesStr}`;
+        }
+
+        function deconnexion() {
+            if(peer) { peer.destroy(); peer = null; }
+            compteActif = null; if(modeInscription) basculerModeAuth();
+            document.getElementById('menu-screen').style.display = "none"; document.getElementById('auth-screen').style.display = "flex"; jeuEnCours = false;
+        }
+
+        // --- LOGIQUE ET ENTRÉES MATCH ---
+        let scoreBleu = 0, scoreRouge = 0, isResetting = false, jeuEnCours = false, tempsRestant = 150, intervalChrono = null;
+        let terrain = { width: 2000, height: 1100 }, ball = { x: 0, y: 0, vx: 0, vy: 0, radius: 28 };
+        let joueur = { x: -600, y: 0, vx: 0, vy: 0, angle: 0, turbo: 100, skin: 0, boostColor: "#f97316" };
+        let bot = { x: 600, y: 0, vx: 0, vy: 0, angle: Math.PI, turbo: 100, skin: 0, boostColor: "#f43f5e" };
+
+        const keys = { avant: false, arriere: false, turbo: false };
+        let mouseX = 0, mouseY = 0;
+        
+        // Inputs Mobiles Virtuels
+        let mobileJoystick = { active: false, startX: 0, startY: 0, curX: 0, curY: 0, angle: 0 };
+
+        // Écouteurs d'événements physiques classiques
+        window.addEventListener('mousemove', (e) => { mouseX = e.clientX; mouseY = e.clientY; });
+        window.addEventListener('mousedown', (e) => {
+            if (peripheriqueChoisi === 'souris') {
+                if (e.button === 0) keys.avant = true;
+                if (e.button === 2) keys.turbo = true;
+            }
+        });
+        window.addEventListener('mouseup', (e) => {
+            if (peripheriqueChoisi === 'souris') {
+                if (e.button === 0) keys.avant = false;
+                if (e.button === 2) keys.turbo = false;
+            }
+        });
+        window.addEventListener('contextmenu', e => e.preventDefault()); // Bloque le menu clic droit en jeu
+
+        window.addEventListener('keydown', (e) => {
+            if (peripheriqueChoisi === 'clavier') {
+                if (e.key === 'z' || e.key === 'Z' || e.key === 'ArrowUp') keys.avant = true;
+                if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') keys.arriere = true;
+                if (e.code === 'Space') keys.turbo = true;
+            }
+        });
+        window.addEventListener('keyup', (e) => {
+            if (peripheriqueChoisi === 'clavier') {
+                if (e.key === 'z' || e.key === 'Z' || e.key === 'ArrowUp') keys.avant = false;
+                if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') keys.arriere = false;
+                if (e.code === 'Space') keys.turbo = false;
+            }
+        });
+
+        // Config Controls Mobiles
+        const padJoy = document.getElementById('mobile-joystick-container');
+        const knobJoy = document.getElementById('mobile-joystick-knob');
+        
+        padJoy.addEventListener('touchstart', (e) => {
+            mobileJoystick.active = true;
+            let b = padJoy.getBoundingClientRect();
+            mobileJoystick.startX = b.left + b.width/2;
+            mobileJoystick.startY = b.top + b.height/2;
+        });
+        window.addEventListener('touchmove', (e) => {
+            if(!mobileJoystick.active) return;
+            let t = e.touches[0];
+            let dx = t.clientX - mobileJoystick.startX;
+            let dy = t.clientY - mobileJoystick.startY;
+            let dist = Math.hypot(dx, dy);
+            let maxDist = 40;
+            if(dist > maxDist) { dx = (dx/dist)*maxDist; dy = (dy/dist)*maxDist; }
+            knobJoy.style.transform = `translate(${dx}px, ${dy}px)`;
+            mobileJoystick.angle = Math.atan2(dy, dx);
+        });
+        window.addEventListener('touchend', () => {
+            mobileJoystick.active = false;
+            knobJoy.style.transform = `translate(0px, 0px)`;
+        });
+
+        document.getElementById('btn-touch-drive').addEventListener('touchstart', () => keys.avant = true);
+        document.getElementById('btn-touch-drive').addEventListener('touchend', () => keys.avant = false);
+        document.getElementById('btn-touch-brake').addEventListener('touchstart', () => keys.arriere = true);
+        document.getElementById('btn-touch-brake').addEventListener('touchend', () => keys.arriere = false);
+        document.getElementById('btn-touch-boost').addEventListener('touchstart', () => keys.turbo = true);
+        document.getElementById('btn-touch-boost').addEventListener('touchend', () => keys.turbo = false);
+
+        function lancerJeu(onlineMode) {
+            estEnLigne = onlineMode; scoreBleu = 0; scoreRouge = 0; tempsRestant = 150;
+            document.getElementById('sb').innerText = pseudo + " : 0"; 
+            document.getElementById('sr').innerText = estEnLigne ? "ADVERSE : 0" : "ROUGE : 0";
+            document.getElementById('timer').innerText = "02:30"; 
+            
+            document.getElementById('menu-screen').style.display = "none";
+            document.getElementById('ui').style.display = "flex";
+            document.getElementById('money-counter').style.display = "block"; 
+            document.getElementById('turbo-container').style.display = "block";
+            document.getElementById('leave-btn').style.display = "block";
+            document.getElementById('help-btn').style.display = "block";
+
+            if (peripheriqueChoisi === 'mobile') {
+                document.getElementById('mobile-controls').style.display = "flex";
+            }
+
+            joueur.skin = skinEquipe; joueur.boostColor = catalogueBoosts[boostEquipe].couleur;
+            if(!estEnLigne) { bot.skin = 0; bot.boostColor = "#f43f5e"; }
+
+            boostPads.forEach(p => { p.active = true; p.cooldown = 0; });
+            actualiserMonnaie(); resetPositions(); jeuEnCours = true;
+            
+            clearInterval(intervalChrono); 
+            if(!estEnLigne || jeSuisHote) intervalChrono = setInterval(gestionChrono, 1000);
+        }
+
+        function gestionChrono() {
+            if (!jeuEnCours || isResetting) return;
+            tempsRestant--;
+            let minutes = Math.floor(tempsRestant / 60), secondes = tempsRestant % 60;
+            document.getElementById('timer').innerText = (minutes < 10 ? "0" : "") + minutes + ":" + (secondes < 10 ? "0" : "") + secondes;
+            if (tempsRestant <= 0) finDuMatch();
+        }
+
+        function finDuMatch() {
+            jeuEnCours = false; clearInterval(intervalChrono);
+            let messageFin = "";
+            if (scoreBleu > scoreRouge) {
+                pieces += 150; messageFin = "VICTOIRE ! 🥳<br>+150 💰";
+                if (!estEnLigne && rangIndex < listeRangs.length - 1) {
+                    etoiles++;
+                    if (etoiles >= 3) { etoiles = 0; rangIndex++; messageFin += `<br><span style="color:#22c55e;">UP ! Tu passes ${listeRangs[rangIndex].nom} ! 🎉</span>`; }
+                }
+            } else if (scoreBleu < scoreRouge) {
+                pieces += 30; messageFin = "DÉFAITE... 😢<br>+30 💰";
+            } else { pieces += 60; messageFin = "ÉGALITÉ ! 🤝<br>+60 💰"; }
+
+            sauvegarder(); actualiserAffichageRang();
+            let alertBox = document.getElementById('goal-alert'); alertBox.innerHTML = messageFin; alertBox.style.color = "#ffaa00"; alertBox.style.display = "block";
+            setTimeout(() => { alertBox.style.display = "none"; quitterMatch(); }, 5000);
+        }
+
+        function quitterMatch() {
+            jeuEnCours = false; clearInterval(intervalChrono);
+            if(conn) { conn.close(); conn = null; }
+            document.getElementById('ui').style.display = "none"; document.getElementById('money-counter').style.display = "none";
+            document.getElementById('turbo-container').style.display = "none"; document.getElementById('leave-btn').style.display = "none";
+            document.getElementById('help-btn').style.display = "none"; document.getElementById('mobile-controls').style.display = "none";
+            document.getElementById('goal-alert').style.display = "none"; document.getElementById('menu-screen').style.display = "flex";
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // --- GESTION BOUTIQUE ---
+        function ouvrirBoutique() { document.getElementById('menu-screen').style.display = "none"; document.getElementById('shop-screen').style.display = "flex"; renderBoutique(); }
+        function fermerBoutique() { document.getElementById('shop-screen').style.display = "none"; document.getElementById('menu-screen').style.display = "flex"; }
+        function actualiserMonnaie() { document.getElementById('shop-coins').innerText = pieces; document.getElementById('game-coins').innerText = pieces; }
+
+        function renderBoutique() {
+            actualiserMonnaie();
+            const generate = (boxId, list, ownedList, equippedId, type) => {
+                const box = document.getElementById(boxId); box.innerHTML = "";
+                list.forEach(item => {
+                    let owned = ownedList.includes(item.id); let eq = (equippedId === item.id);
+                    const el = document.createElement('div'); el.className = `shop-item ${eq ? 'selected' : ''}`;
+                    el.innerHTML = `<div style="font-weight:bold; font-size:14px; margin-bottom:4px;">${item.nom}</div><div class="item-preview" style="background:${item.couleur};"></div><div style="font-size:13px; font-weight:bold;">${owned ? (eq ? 'ÉQUIPÉ' : 'POSSÉDÉ') : item.prix+' 💰'}</div>`;
+                    el.onclick = () => {
+                        if (owned) { if(type===1) skinEquipe=item.id; if(type===2) boostEquipe=item.id; if(type===3) goalEquipe=item.id; }
+                        else if (pieces >= item.prix) { pieces -= item.prix; ownedList.push(item.id); if(type===1) skinEquipe=item.id; if(type===2) boostEquipe=item.id; if(type===3) goalEquipe=item.id; }
+                        sauvegarder(); renderBoutique();
+                    };
+                    box.appendChild(el);
+                });
+            };
+            generate('shop-cars', catalogueVoitures, listeVoituresPossedees, skinEquipe, 1);
+            generate('shop-boosts', catalogueBoosts, listeBoostsPossedes, boostEquipe, 2);
+            generate('shop-goals', catalogueGoals, listeGoalsPossedes, goalEquipe, 3);
+        }
+
+        function resetPositions() {
+            ball.x = 0; ball.y = 0; ball.vx = 0; ball.vy = 0;
+            joueur.x = -600; joueur.y = 0; joueur.vx = 0; joueur.vy = 0; joueur.turbo = 100;
+            bot.x = 600; bot.y = 0; bot.vx = 0; bot.vy = 0; bot.turbo = 100;
+        }
+
+        function declencherBut(texte, estPourJoueur) {
+            isResetting = true; let explosionId = estPourJoueur ? goalEquipe : 0; let colorExplosion = catalogueGoals[explosionId].couleur;
+            if(estPourJoueur) { pieces += 20; sauvegarder(); actualiserMonnaie(); texte += " (+20 💰)"; }
+            if(estEnLigne && conn && conn.open) conn.send({ type: 'BUT', texte: texte, color: colorExplosion });
+            declencherButLocal(texte, colorExplosion);
+        }
+
+        function declencherButLocal(texte, couleurExplosion) {
+            isResetting = true; let alertBox = document.getElementById('goal-alert'); alertBox.innerHTML = texte; alertBox.style.color = couleurExplosion; alertBox.style.display = "block";
+            setTimeout(() => { alertBox.style.display = "none"; if(jeuEnCours) { resetPositions(); isResetting = false; } }, 2300);
+        }
+
+        function dessinerVoiture(x, y, angle, idSkin, colorBase, aActiveBoost, customBoostColor) {
+            ctx.save(); ctx.translate(x, y); ctx.rotate(angle);
+            if (aActiveBoost) {
+                ctx.fillStyle = customBoostColor; ctx.beginPath(); ctx.moveTo(-28, -6); ctx.lineTo(-50, -2); ctx.lineTo(-35, 0); ctx.lineTo(-50, 2); ctx.lineTo(-28, 6); ctx.fill();
+            }
+            let styleSkins = catalogueVoitures[idSkin] || catalogueVoitures[0];
+            if(styleSkins.type === "futuriste") {
+                ctx.fillStyle = '#1e293b'; ctx.fillRect(-20, -15, 8, 4); ctx.fillRect(10, -15, 8, 4); ctx.fillRect(-20, 11, 8, 4); ctx.fillRect(10, 11, 8, 4);
+                ctx.fillStyle = styleSkins.couleur; ctx.beginPath(); ctx.moveTo(-25, -12); ctx.lineTo(25, -8); ctx.lineTo(25, 8); ctx.lineTo(-25, 12); ctx.closePath(); ctx.fill();
+                ctx.lineWidth = 2; ctx.strokeStyle = '#ffffff'; ctx.stroke();
+            } else {
+                let c = colorBase || styleSkins.couleur;
+                ctx.fillStyle = '#1e293b'; ctx.fillRect(-18, -16, 10, 5); ctx.fillRect(8, -16, 10, 5); ctx.fillRect(-18, 11, 10, 5); ctx.fillRect(8, 11, 10, 5);
+                ctx.fillStyle = c; ctx.beginPath(); ctx.roundRect(-25, -12, 50, 24, 6); ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#ffffff'; ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        function dessinerBallon(x, y, r, angleRotation) {
+            ctx.save(); ctx.translate(x, y); ctx.rotate(angleRotation);
+            ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#000000'; ctx.stroke();
+            ctx.restore();
+        }
+
+        let angleBalle = 0;
+
+        // --- MANETTE GAMEPAD : POLLING NATION ---
+        function scanGamepad() {
+            if (peripheriqueChoisi !== 'manette') return;
+            const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+            const gp = gamepads[0];
+            if (!gp) return;
+
+            // Sticks de visée directionnelle
+            let lx = gp.axes[0], ly = gp.axes[1];
+            if (Math.abs(lx) > 0.1 || Math.abs(ly) > 0.1) {
+                let cible = jeSuisHote || !estEnLigne ? joueur : bot;
+                cible.angle = Math.atan2(ly, lx);
+            }
+            // Boutons d'actions
+            keys.avant = gp.buttons[0].pressed; // Bouton A / Croix
+            keys.turbo = gp.buttons[1].pressed; // Bouton B / Rond
+        }
+
+        // --- BOUCLE PRINCIPALE ---
+        function update() {
+            if (jeuEnCours) {
+                boostPads.forEach(p => { if (!p.active) { p.cooldown--; if (p.cooldown <= 0) p.active = true; } });
+                
+                scanGamepad(); // Récupère l'état de la manette si active
+
+                let maVoiture = jeSuisHote || !estEnLigne ? joueur : bot;
+
+                // Calcul orientation selon périphérique standard (Clavier / Souris)
+                if(peripheriqueChoisi === 'clavier' || peripheriqueChoisi === 'souris') {
+                    let dxMouse = mouseX - (canvas.width / 2), dyMouse = mouseY - (canvas.height / 2);
+                    maVoiture.angle = Math.atan2(dyMouse, dxMouse);
+                } 
+                else if(peripheriqueChoisi === 'mobile' && mobileJoystick.active) {
+                    maVoiture.angle = mobileJoystick.angle;
+                }
+
+                let utiliseTurbo = keys.turbo && maVoiture.turbo > 0 && keys.avant;
+                if (utiliseTurbo) maVoiture.turbo -= 0.6;
+                document.getElementById('turbo-bar').style.width = maVoiture.turbo + "%";
+
+                let force = utiliseTurbo ? 1.4 : (keys.arriere ? -0.4 : 0.7);
+                if (keys.avant || keys.arriere) { 
+                    maVoiture.vx += Math.cos(maVoiture.angle) * force; 
+                    maVoiture.vy += Math.sin(maVoiture.angle) * force; 
+                }
+                maVoiture.vx *= 0.9; maVoiture.vy *= 0.9; maVoiture.x += maVoiture.vx; maVoiture.y += maVoiture.vy;
+
+                // Logique du Bot IA / Synchro Réseau Multi
+                if (!estEnLigne) {
+                    let diff = Math.min(1.35, 0.45 + (rangIndex * 0.06));
+                    if (!isResetting) {
+                        bot.angle = Math.atan2(ball.y - bot.y, ball.x - bot.x);
+                        bot.vx += Math.cos(bot.angle) * diff; bot.vy += Math.sin(bot.angle) * diff;
+                    }
+                    bot.vx *= 0.9; bot.vy *= 0.9; bot.x += bot.vx; bot.y += bot.vy;
+                } else if(conn && conn.open) {
+                    conn.send({ type: 'SYNC_INPUTS', x: maVoiture.x, y: maVoiture.y, angle: maVoiture.angle, turbo: maVoiture.turbo, skin: skinEquipe, boostColor: catalogueBoosts[boostEquipe].couleur });
+                }
+
+                if (!estEnLigne || jeSuisHote) {
+                    ball.x += ball.vx; ball.y += ball.vy; ball.vx *= 0.98; ball.vy *= 0.98;
+                    boostPads.forEach(p => {
+                        if (p.active) {
+                            if (Math.hypot(joueur.x - p.x, joueur.y - p.y) < 45) { joueur.turbo = Math.min(100, joueur.turbo + 40); p.active = false; p.cooldown = 400; }
+                            if (Math.hypot(bot.x - p.x, bot.y - p.y) < 45) { bot.turbo = Math.min(100, bot.turbo + 40); p.active = false; p.cooldown = 400; }
+                        }
+                    });
+
+                    let hW = terrain.width / 2, hH = terrain.height / 2;
+                    if (Math.abs(ball.y) > hH - ball.radius) { ball.vy = -ball.vy * 0.8; ball.y = Math.sign(ball.y) * (hH - ball.radius); }
+                    if (Math.abs(ball.x) > hW - ball.radius) {
+                        if (Math.abs(ball.y) < 180 && !isResetting) {
+                            if (ball.x > 0) { scoreBleu++; declencherBut("BUT POUR TOI !", true); } 
+                            else { scoreRouge++; declencherBut("BUT ADVERSE !", false); }
+                        } else { ball.vx = -ball.vx * 0.8; ball.x = Math.sign(ball.x) * (hW - ball.radius); }
+                    }
+
+                    const col = (c) => {
+                        let hx = ball.x - c.x, hy = ball.y - c.y, d = Math.sqrt(hx*hx + hy*hy);
+                        if (d < ball.radius + 25) { let a = Math.atan2(hy, hx); ball.vx = Math.cos(a) * 9; ball.vy = Math.sin(a) * 9; }
+                    };
+                    col(joueur); col(bot);
+
+                    if(estEnLigne && conn && conn.open) conn.send({ type: 'SYNC_BALL', x: ball.x, y: ball.y, sb: scoreBleu, sr: scoreRouge, temps: tempsRestant });
+                }
+
+                let vueCam = jeSuisHote || !estEnLigne ? joueur : bot;
+                ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.save(); ctx.translate(canvas.width / 2 - vueCam.x, canvas.height / 2 - vueCam.y);
+
+                let hW = terrain.width / 2, hH = terrain.height / 2;
+                ctx.fillStyle = '#065f46'; ctx.fillRect(-hW, -hH, terrain.width, terrain.height);
+                ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 5; ctx.strokeRect(-hW, -hH, terrain.width, terrain.height);
+                ctx.beginPath(); ctx.moveTo(0, -hH); ctx.lineTo(0, hH); ctx.stroke();
+                ctx.beginPath(); ctx.arc(0, 0, 150, 0, Math.PI*2); ctx.stroke();
+                ctx.lineWidth = 8; ctx.strokeStyle = '#00aaff'; ctx.strokeRect(-hW - 40, -180, 40, 360); ctx.strokeStyle = '#f43f5e'; ctx.strokeRect(hW, -180, 40, 360);
+
+                boostPads.forEach(p => {
+                    ctx.beginPath(); ctx.arc(p.x, p.y, 16, 0, Math.PI*2);
+                    if (p.active) { ctx.fillStyle = '#facc15'; ctx.fill(); } else { ctx.fillStyle = 'rgba(71,85,105,0.3)'; ctx.fill(); }
+                });
+
+                dessinerVoiture(joueur.x, joueur.y, joueur.angle, joueur.skin, null, (jeSuisHote || !estEnLigne ? utiliseTurbo : keys.turbo), joueur.boostColor);
+                dessinerVoiture(bot.x, bot.y, bot.angle, bot.skin, estEnLigne ? null : '#f43f5e', (!jeSuisHote && estEnLigne ? utiliseTurbo : false), bot.boostColor);
+                dessinerBallon(ball.x, ball.y, ball.radius, angleBalle);
+                ctx.restore();
+            }
+            requestAnimationFrame(update);
+        }
+        update();
+    </script>
+</body>
+</html>
